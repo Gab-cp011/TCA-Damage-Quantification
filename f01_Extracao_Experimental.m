@@ -1,110 +1,99 @@
 %% 01_Extracao_Experimental.m
-% Módulo 1: Extração Experimental via Densidade Espetral de Potência (Welch)
+% Módulo 1: Extração Experimental (PSD única, PSD multicanal ou Circle Fit)
 clc; clear; close all;
 
-% 1. Definição dos parâmetros iniciais e diretórios
+% 1. Parâmetros iniciais e diretórios
 data_dir = 'Data';
 estados_validos = {'state#13', 'state#02', 'state#01', 'state#17', ...
     'state#24', 'state#21', 'state#18', 'state#23', 'state#22'};
-fs = 322.58; % Frequência de amostragem definida pelo equipamento (Hz)
+fs = 322.58; 
 
 % =========================================================================
-% CONFIGURAÇÕES DE EXTRAÇÃO E PROCESSAMENTO
+% CHAVEAMENTO METODOLÓGICO
 % =========================================================================
-% nfft ajustado para 4096 para equilibrar resolução e média temporal
 nfft = 4096; 
 window = hanning(nfft);
-noverlap = nfft / 2; % Sobreposição de 50% entre os blocos
+noverlap = nfft / 2;
 
-% Escolha o método de extração: 'unico' (artigo original) ou 'multicanal'
-metodo_extracao = 'multicanal'; 
-
-% Se for multicanal, escolha como fundir as PSDs: 'media' ou 'soma'
+% Opções: 'unico', 'multicanal', 'circle_fit'
+metodo_extracao = 'circle_fit'; 
+% Opções: 'soma', 'media' (usado apenas se metodo_extracao = 'multicanal')
 metodo_fusao = 'media'; 
 % =========================================================================
 
-% Inicialização das matrizes de armazenamento finais
-Xt = [];
-Labels_t = [];
+Xt = []; Labels_t = [];
+bounds = [27.0, 33.0; 51.0, 59.0; 67.0, 73.0];
 
-% Fronteiras de contenção para os três modos de flexão
-bounds = [27.0, 33.0;  
-    51.0, 59.0;  
-    67.0, 73.0];
+fprintf('Iniciando extração via método: %s\n', metodo_extracao);
 
-fprintf('Iniciando processamento dos sinais experimentais...\n');
-
-% 3. Processo iterativo de leitura e extração
 for i = 1:length(estados_validos)
     state_name = estados_validos{i};
-    state_path = fullfile(data_dir, state_name);
-
-    % Busca todos os arquivos de texto dentro da pasta do estado atual
-    arquivos = dir(fullfile(state_path, 'data*.txt'));
-
+    arquivos = dir(fullfile(data_dir, state_name, 'data*.txt'));
+    
     if isempty(arquivos)
-        error('Arquivos não encontrados para %s. Verifique o caminho.', state_name);
+        error('Arquivos não encontrados no diretório %s.', state_name);
     end
+    
+    for j = 1:length(arquivos)
+        raw_data = readmatrix(fullfile(arquivos(j).folder, arquivos(j).name));
+        
+        % Separação das matrizes de entrada (força) e saída (aceleração)
+        force = raw_data(:, 1);
+        accels = raw_data(:, 2:5);
 
-    num_testes = length(arquivos);
-
-    for j = 1:num_testes
-        file_path = fullfile(arquivos(j).folder, arquivos(j).name);
-        raw_data = readmatrix(file_path);
-
-        % --- BLOCO ALTERNÁVEL: EXTRAÇÃO DA PSD ---
+        % Lógica de roteamento de extração
         if strcmp(metodo_extracao, 'unico')
-            % Método 1: Apenas aceleração do topo (Canal 4 = coluna 5)
-            sinal_topo = raw_data(:, 5);
-            
-            % Cálculo da Densidade Espetral de Potência (PSD)
-            [Pxx, f_psd] = pwelch(sinal_topo, window, noverlap, nfft, fs);
+            [Pxx, f_vec] = pwelch(accels(:, 4), window, noverlap, nfft, fs);
             
         elseif strcmp(metodo_extracao, 'multicanal')
-            % Método 2: Fusão dos 4 acelerômetros (Canais 1 a 4 = colunas 2 a 5)
-            sinais_andares = raw_data(:, 2:5);
-            
-            % Inicializa a matriz para guardar as PSDs individuais dos 4 andares
-            % O tamanho de saída do f_psd no MATLAB para sinais reais é (nfft/2)+1
             Pxx_all = zeros(nfft/2 + 1, 4);
-            
             for canal = 1:4
-                [Pxx_all(:, canal), f_psd] = pwelch(sinais_andares(:, canal), window, noverlap, nfft, fs);
+                [Pxx_all(:, canal), f_vec] = pwelch(accels(:, canal), window, noverlap, nfft, fs);
             end
             
-            % Fusão espacial da energia espectral
+            % Estrutura de decisão validada para fusão
             if strcmp(metodo_fusao, 'soma')
                 Pxx = sum(Pxx_all, 2);
-            elseif strcmp(metodo_fusao, 'media')
-                Pxx = mean(Pxx_all, 2);
             else
-                error('Método de fusão inválido. Escolha "soma" ou "media".');
+                Pxx = mean(Pxx_all, 2);
             end
+            
+        elseif strcmp(metodo_extracao, 'circle_fit')
+            H_all = zeros(nfft/2 + 1, 4);
+            for canal = 1:4
+                % H1 Estimator para isolar polos mecânicos reais
+                [H_all(:, canal), f_vec] = tfestimate(force, accels(:, canal), window, noverlap, nfft, fs);
+            end
+            H_complex = mean(H_all, 2);
         else
-            error('Método de extração inválido. Escolha "unico" ou "multicanal".');
+            error('Método de extração inválido configurado.');
         end
-        % -----------------------------------------
 
+        % Extração paramétrica por banda
         fn = zeros(1, 3);
         for k = 1:3
-            % Isolamento da região de busca para o modo específico
-            idx_range = f_psd >= bounds(k,1) & f_psd <= bounds(k,2);
-            f_range = f_psd(idx_range);
-            Pxx_range = Pxx(idx_range);
-
-            % Identificação da frequência com maior concentração de energia
-            [~, max_idx] = max(Pxx_range);
-            fn(k) = f_range(max_idx);
+            idx_range = f_vec >= bounds(k,1) & f_vec <= bounds(k,2);
+            
+            if strcmp(metodo_extracao, 'circle_fit')
+                f_band_indices = find(idx_range);
+                
+                % Identificação do pico preliminar em magnitude para ancorar a busca de Nyquist
+                [~, max_local_idx] = max(abs(H_complex(idx_range)));
+                peak_f = f_vec(f_band_indices(max_local_idx));
+                
+                % Acionamento da extração de fase
+                fn(k) = circle_fit_modal(f_vec, H_complex, peak_f);
+            else
+                f_range = f_vec(idx_range);
+                [~, max_idx] = max(Pxx(idx_range));
+                fn(k) = f_range(max_idx);
+            end
         end
-
-        % Acumulação das três frequências e do rótulo numérico da condição
-        Xt = [Xt; fn(1), fn(2), fn(3)];
+        
+        Xt = [Xt; fn];
         Labels_t = [Labels_t; i];
     end
-    fprintf('Estado processado com sucesso: %s\n', state_name);
 end
 
-% 4. Salvamento seguro da base de dados física
-nome_arquivo_alvo = 'Dados_Alvo.mat';
-save(nome_arquivo_alvo, 'Xt', 'Labels_t');
-fprintf('\nFase 1 concluída. Dados experimentais consolidados em: %s\n', nome_arquivo_alvo);
+save('Dados_Alvo.mat', 'Xt', 'Labels_t');
+fprintf('Extração física finalizada. Matriz salva para etapa de Adaptação de Domínio.\n');
