@@ -33,3 +33,15 @@ To ensure the scripts work correctly, follow the execution order below:
 
 *** 
 *Note: The `Dados_Alvo.mat` and `Dados_Origem.mat` matrices are mandatory requirements to run Phase 3, and the script will return an error if they are not found in the directory[cite: 1].*
+
+## 📊 Dataset
+
+The experimental data required to run the extraction scripts is not included in this repository. You can download the complete dataset from the following link:
+
+👉 **[Download Dataset Here](https://drive.google.com/drive/folders/1ZKao-fyNRudde7wgwp9wjfajUt0-hwDo?usp=sharing)**
+
+**Instructions:**
+1. Download the dataset from the link above.
+2. Extract the downloaded file.
+3. Place the `Data` folder directly into the root directory of this repository. 
+4. Proceed with running Phase 1 (`01_Extracao_Experimental.m`).
