@@ -29,9 +29,12 @@ for i = 1:N_rodadas
     % Preserva a separabilidade não supervisionada do domínio alvo
     mu_X = mean(Xs);
     sigma_X = std(Xs);
-
+    
     Xs_norm = (Xs - mu_X) ./ sigma_X;
     Xt_norm = (Xt - mu_X) ./ sigma_X;
+
+    %Xs_norm = zscore(Xs);
+    %Xt_norm = zscore(Xt); 
 
     % 3. Análise de Componentes de Transferência
     % Configuração replicada do artigo: 1 componente principal, regularização 0.1
@@ -48,7 +51,9 @@ for i = 1:N_rodadas
 
     % Limiar percentílico (99%) para blindagem contra outliers estocásticos
     dist_saudavel = pdist2(Zs_saudavel, mu_s, 'mahalanobis', Sigma_s).^2;
-    limiar = prctile(dist_saudavel, 99);
+
+    %limiar = prctile(dist_saudavel, 99);
+    limiar = max(dist_saudavel);
 
     % Avaliação da integridade do domínio físico
     dist_target = pdist2(Zt, mu_s, 'mahalanobis', Sigma_s).^2;
