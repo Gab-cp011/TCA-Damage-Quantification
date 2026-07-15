@@ -1,0 +1,35 @@
+# Structural Damage Detection with Domain Adaptation
+
+This repository contains MATLAB codes for structural health monitoring and damage detection. The project uses Domain Adaptation methods, specifically Transfer Component Analysis (TCA), combined with the Mahalanobis distance to classify experimental data based on a numerical model[cite: 1, 2].
+
+## 📂 Repository Structure
+
+The project is divided into three main modules:
+
+*   **Module 1: Experimental Extraction (`01_Extracao_Experimental.m` and `01_Extracao_Experimental_Atualizado.m`)**
+    *   Processes experimental signals, extracting force and accelerometer information[cite: 4].
+    *   Extracts natural frequencies using Power Spectral Density (PSD) via Welch's method or the Modal Circle Fit method from complex FRF estimates[cite: 3, 4].
+    *   Allows extractions using a single channel or through multichannel analysis with spatial fusion[cite: 3].
+    *   Generates and consolidates the physical database in the `Dados_Alvo.mat` (Target Domain) file[cite: 3, 4].
+
+*   **Module 2: Numerical Generation (`02_Geracao_Numerica.m`)**
+    *   Generates the Source Domain by simulating theoretical frequencies from a 4-degree-of-freedom (4-DOF) numerical dynamic model[cite: 5].
+    *   Simulates structural conditions through stochastic mapping of the Modulus of Elasticity, operational mass variations, and progressive stiffness loss[cite: 5].
+    *   Saves the theoretical simulation database in the `Dados_Origem.mat` file[cite: 5].
+
+*   **Module 3: Adaptation and Classification (`03_Adaptacao_Classificacao.m` and `TCA_linear.m`)**
+    *   Loads the unified data from the target (`Dados_Alvo.mat`) and source (`Dados_Origem.mat`) domains[cite: 1].
+    *   Applies Transfer Component Analysis (TCA) with a linear kernel to align the data in a new latent space and minimize domain discrepancy[cite: 1, 2].
+    *   Employs Mahalanobis classification, where the decision boundary learns exclusively from healthy samples (conditions 1 to 3)[cite: 1].
+    *   Evaluates predictions against damaged samples (conditions 4 to 9) and calculates final performance using the Macro F1 metric[cite: 1].
+
+## 🚀 How to Run
+
+To ensure the scripts work correctly, follow the execution order below:
+
+1.  **Phase 1:** Run one of the Module 1 scripts (`01_Extracao_Experimental.m` or the updated version) to process the files in the `Data` folder and generate the `Dados_Alvo.mat` file[cite: 3, 4].
+2.  **Phase 2:** Run `02_Geracao_Numerica.m` to execute the theoretical stochastic model and generate the `Dados_Origem.mat` file[cite: 5].
+3.  **Phase 3:** With both files generated in the previous phases, run `03_Adaptacao_Classificacao.m` to start domain alignment and view classification performance[cite: 1].
+
+*** 
+*Note: The `Dados_Alvo.mat` and `Dados_Origem.mat` matrices are mandatory requirements to run Phase 3, and the script will return an error if they are not found in the directory[cite: 1].*
