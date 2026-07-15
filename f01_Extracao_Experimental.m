@@ -11,12 +11,16 @@ fs = 322.58;
 % =========================================================================
 % CHAVEAMENTO METODOLÓGICO
 % =========================================================================
-nfft = 4096; 
-window = hanning(nfft);
-noverlap = nfft / 2;
+% Configurações de janela temporal (Redução de ruído via médias)
+tam_janela = 4096; 
+window = hanning(tam_janela);
+noverlap = tam_janela / 2; % Sobreposição de 50%
+
+% Configuração de Resolução Espectral (Zero-Padding)
+nfft = 32768; % Interpolando o espectro para altíssima resolução
 
 % Opções: 'unico', 'multicanal', 'circle_fit'
-metodo_extracao = 'circle_fit'; 
+metodo_extracao = 'multicanal'; 
 % Opções: 'soma', 'media' (usado apenas se metodo_extracao = 'multicanal')
 metodo_fusao = 'media'; 
 % =========================================================================
@@ -85,8 +89,18 @@ for i = 1:length(estados_validos)
                 fn(k) = circle_fit_modal(f_vec, H_complex, peak_f);
             else
                 f_range = f_vec(idx_range);
-                [~, max_idx] = max(Pxx(idx_range));
-                fn(k) = f_range(max_idx);
+                Pxx_range = Pxx(idx_range);
+                
+                % Extração baseada na topologia da concavidade
+                [pks, locs] = findpeaks(Pxx_range, f_range, 'SortStr', 'descend', 'NPeaks', 1);
+                
+                % Fallback de segurança contra anomalias severas de ruído
+                if ~isempty(locs)
+                    fn(k) = locs; 
+                else
+                    [~, max_idx] = max(Pxx_range);
+                    fn(k) = f_range(max_idx);
+                end
             end
         end
         
