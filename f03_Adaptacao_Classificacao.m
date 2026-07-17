@@ -13,6 +13,8 @@ else
     error('Arquivos não encontrados. Execute as Fases 1 e 2 previamente.');
 end
 
+Xt=Xt'; 
+
 N_rodadas = length(hc_array);
 historico_macro_f1 = zeros(N_rodadas, 1);
 
@@ -79,3 +81,7 @@ for i = 1:N_rodadas
 
     fprintf('Rodada %02d (hc = %.4f m) | Macro F1: %.4f\n', i, hc_array(i), historico_macro_f1(i));
 end
+
+nome_arquivo_origem = 'Dados_Espaco_Latente.mat';
+save(nome_arquivo_origem, 'Zs', 'Zt');
+fprintf('\nFase 3 concluída.');
