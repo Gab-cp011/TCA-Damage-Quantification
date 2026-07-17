@@ -1,35 +1,42 @@
 %% 01_Extracao_Experimental.m
-% Módulo 1: Extração Experimental (PSD única, PSD multicanal ou Circle Fit)
+% Módulo 1: Extração Experimental (PSD única, PSD multicanal ou FRF Fitting)
 clc; clear; close all;
 
-% 1. Parâmetros iniciais e diretórios
+% =========================================================================
+% 1. Parâmetros Iniciais e Diretórios
+% =========================================================================
 data_dir = 'Data';
 estados_validos = {'state#13', 'state#02', 'state#01', 'state#17', ...
-    'state#24', 'state#21', 'state#18', 'state#23', 'state#22'};
-fs = 322.58; 
+                   'state#24', 'state#21', 'state#18', 'state#23', 'state#22'};
+
+read_aux = readmatrix('Data/time.txt');
+t = read_aux(:, 3);
+fs = 1 / (t(2) - t(1)); 
 
 % =========================================================================
-% CHAVEAMENTO METODOLÓGICO
+% 2. Parâmetros de Processamento de Sinal
 % =========================================================================
 % Configurações de janela temporal (Redução de ruído via médias)
-tam_janela = 4096; 
+tam_janela = 1024 / 4; 
 window = hanning(tam_janela);
-noverlap = tam_janela / 2; % Sobreposição de 50%
+noverlap = tam_janela * 3 / 4; % Sobreposição de 75%
+ch = 4; % Canal de aceleração alvo
 
 % Configuração de Resolução Espectral (Zero-Padding)
-nfft = 32768; % Interpolando o espectro para altíssima resolução
+nfft = tam_janela; 
 
-% Opções: 'unico', 'multicanal', 'circle_fit'
-metodo_extracao = 'multicanal'; 
-% Opções: 'soma', 'media' (usado apenas se metodo_extracao = 'multicanal')
-metodo_fusao = 'media'; 
+Xt = []; 
+Labels_t = [];
+
+% Estimativas iniciais para o algoritmo de Fitting
+f0 = [30; 55; 70];
+maxiter = 20;
+
+fprintf('Iniciando extração de características para o canal %d\n', ch);
+
 % =========================================================================
-
-Xt = []; Labels_t = [];
-bounds = [27.0, 33.0; 51.0, 59.0; 67.0, 73.0];
-
-fprintf('Iniciando extração via método: %s\n', metodo_extracao);
-
+% 3. Loop de Extração de Parâmetros Modais
+% =========================================================================
 for i = 1:length(estados_validos)
     state_name = estados_validos{i};
     arquivos = dir(fullfile(data_dir, state_name, 'data*.txt'));
@@ -41,73 +48,44 @@ for i = 1:length(estados_validos)
     for j = 1:length(arquivos)
         raw_data = readmatrix(fullfile(arquivos(j).folder, arquivos(j).name));
         
-        % Separação das matrizes de entrada (força) e saída (aceleração)
+        % Separação dos canais
         force = raw_data(:, 1);
         accels = raw_data(:, 2:5);
 
-        % Lógica de roteamento de extração
-        if strcmp(metodo_extracao, 'unico')
-            [Pxx, f_vec] = pwelch(accels(:, 4), window, noverlap, nfft, fs);
-            
-        elseif strcmp(metodo_extracao, 'multicanal')
-            Pxx_all = zeros(nfft/2 + 1, 4);
-            for canal = 1:4
-                [Pxx_all(:, canal), f_vec] = pwelch(accels(:, canal), window, noverlap, nfft, fs);
-            end
-            
-            % Estrutura de decisão validada para fusão
-            if strcmp(metodo_fusao, 'soma')
-                Pxx = sum(Pxx_all, 2);
-            else
-                Pxx = mean(Pxx_all, 2);
-            end
-            
-        elseif strcmp(metodo_extracao, 'circle_fit')
-            H_all = zeros(nfft/2 + 1, 4);
-            for canal = 1:4
-                % H1 Estimator para isolar polos mecânicos reais
-                [H_all(:, canal), f_vec] = tfestimate(force, accels(:, canal), window, noverlap, nfft, fs);
-            end
-            H_complex = mean(H_all, 2);
-        else
-            error('Método de extração inválido configurado.');
-        end
-
-        % Extração paramétrica por banda
-        fn = zeros(1, 3);
-        for k = 1:3
-            idx_range = f_vec >= bounds(k,1) & f_vec <= bounds(k,2);
-            
-            if strcmp(metodo_extracao, 'circle_fit')
-                f_band_indices = find(idx_range);
-                
-                % Identificação do pico preliminar em magnitude para ancorar a busca de Nyquist
-                [~, max_local_idx] = max(abs(H_complex(idx_range)));
-                peak_f = f_vec(f_band_indices(max_local_idx));
-                
-                % Acionamento da extração de fase
-                fn(k) = circle_fit_modal(f_vec, H_complex, peak_f);
-            else
-                f_range = f_vec(idx_range);
-                Pxx_range = Pxx(idx_range);
-                
-                % Extração baseada na topologia da concavidade
-                [pks, locs] = findpeaks(Pxx_range, f_range, 'SortStr', 'descend', 'NPeaks', 1);
-                
-                % Fallback de segurança contra anomalias severas de ruído
-                if ~isempty(locs)
-                    fn(k) = locs; 
-                else
-                    [~, max_idx] = max(Pxx_range);
-                    fn(k) = f_range(max_idx);
-                end
-            end
-        end
+        % Estimativa da Função de Resposta em Frequência (FRF)
+        [G, f] = tfestimate(force, accels(:, ch), window, noverlap, nfft, fs);
+    
+        % Ajuste de Curva para extração dos parâmetros modais
+        [q, err] = Fitting(G, f, f0, maxiter);
+    
+        u = q(1);
+        v = q(2);
+        r = q(3:5);
+        s = q(6:8);
         
-        Xt = [Xt; fn];
+        % Reconstrução da FRF analítica 
+        Hs = zeros(size(G));
+        W = 2 * pi * f;
+        for k = 1:length(r)
+            Hs = Hs + r(k) ./ (1i * W - s(k));
+        end
+        Hs = Hs + u + 1i * (W - mean(W)) * v;
+    
+        % Extração da Frequência Natural Amortecida (polos do sistema)
+        wn = abs(s) / 2 / pi;
+        damp = -real(s) ./ abs(s) * 100;
+
+        % Concatenação das features (Matriz Alvo)
+        Xt = [Xt wn];
         Labels_t = [Labels_t; i];
     end
 end
 
-save('Dados_Alvo.mat', 'Xt', 'Labels_t');
-fprintf('Extração física finalizada. Matriz salva para etapa de Adaptação de Domínio.\n');
+% =========================================================================
+% 4. Salvamento da Base de Dados
+% =========================================================================
+hc_array = 0.0045:-0.0003:0.0015;
+nome_arquivo_origem = 'Dados_Alvo.mat';
+
+save(nome_arquivo_origem, 'Xt', 'Labels_t', 'hc_array');
+fprintf('\nFase 1 concluída. Matrizes de alvo consolidadas em: %s\n', nome_arquivo_origem);
