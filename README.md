@@ -31,17 +31,3 @@ To ensure the scripts work correctly, follow the execution order below:
 2.  **Phase 2:** Run `02_Geracao_Numerica.m` to execute the theoretical stochastic model and generate the `Dados_Origem.mat` file.
 3.  **Phase 3:** With both files generated in the previous phases, run `03_Adaptacao_Classificacao.m` to start domain alignment and view classification performance.
 
-*** 
-*Note: The `Dados_Alvo.mat` and `Dados_Origem.mat` matrices are mandatory requirements to run Phase 3, and the script will return an error if they are not found in the directory.*
-
-## 📊 Dataset
-
-The experimental data required to run the extraction scripts is not included in this repository. You can download the complete dataset from the following link:
-
-👉 **[Download Dataset Here](https://drive.google.com/drive/folders/1ZKao-fyNRudde7wgwp9wjfajUt0-hwDo?usp=sharing)**
-
-**Instructions:**
-1. Download the dataset from the link above.
-2. Extract the downloaded file.
-3. Place the `Data` folder directly into the root directory of this repository. 
-4. Proceed with running Phase 1 (`01_Extracao_Experimental.m`).
