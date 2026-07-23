@@ -1,5 +1,5 @@
-function [Zs, Zt] = TCA_linear(Xs, Xt, m, mu)
-    % Obtém o número de amostras
+function [Zs, Zt] = TCA(Xs, Xt, m, mu)
+    % Obtém o número de amostras para os domínios fonte e alvo.
     ns = size(Xs, 1);
     nt = size(Xt, 1);
     n = ns + nt;
@@ -8,7 +8,9 @@ function [Zs, Zt] = TCA_linear(Xs, Xt, m, mu)
     X = [Xs; Xt];
     
     % 1. Construção da Matriz de Kernel Linear
-    K = X * X';
+    % Armazena em cada elemento o produto interno entre duas amostras,
+    % ilustrando a "similaridade"
+    K = X * X'; 
     
     % 2. Construção da Matriz L (Maximum Mean Discrepancy)
     L = zeros(n, n);
